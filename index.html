@@ -1,0 +1,925 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Мини-Ферма: Индустриализация v2.0</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏭</text></svg>">
+    <style>
+        /* --- Стилистика взята и слегка упрощена для читаемости --- */
+        :root{
+            --primary:#2E7D32; --accent:#00BCD4;
+            --background:#121212; --surface:#1E1E1E; --surface-light:#2D2D2D;
+            --text:#fff; --text-secondary:#B0B0B0; --success:#4CAF50; --error:#F44336;
+        }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Segoe UI,system-ui,-apple-system,Arial,sans-serif;background:var(--background);color:var(--text);padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+        .game-container{max-width:760px;margin:0 auto;padding:12px 16px 120px;min-height:100vh}
+        .title{text-align:center;font-weight:700;font-size:22px;margin-bottom:8px;background:linear-gradient(135deg,#4caf50,var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+        .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+        .stat-card{background:var(--surface);padding:10px;border-radius:10px;text-align:center;border:1px solid var(--surface-light);cursor:pointer}
+        .nav-tabs{display:flex;gap:8px;margin-bottom:12px;overflow:auto;padding:6px;border-radius:12px;background:var(--surface)}
+        .tab-btn{background:transparent;border:none;color:var(--text-secondary);padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap}
+        .tab-btn.active{background:var(--surface-light);color:var(--text)}
+        .content-area{min-height:320px}
+        .tab-content{display:none}
+        .tab-content.active{display:block}
+        .production-panel{background:var(--surface);padding:12px;border-radius:12px;border:1px solid var(--surface-light);margin-bottom:12px}
+        .panel-header{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+        .panel-icon{width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--surface-light)}
+        .panel-title{font-weight:600}
+        .progress-container{margin:8px 0}
+        .progress-bar{height:8px;background:var(--surface-light);border-radius:6px;overflow:hidden}
+        .progress-fill{height:100%;width:0;background:linear-gradient(90deg,#4caf50,var(--accent));transition:width .3s}
+        .action-buttons{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+        .action-btn{padding:12px;border-radius:10px;border:none;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center}
+        .action-btn:disabled{opacity:.6;cursor:not-allowed}
+        .upgrades-shop{background:var(--surface);padding:12px;border-radius:12px;border:1px solid var(--surface-light)}
+        .upgrades-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto;padding-right:6px}
+        .upgrade-item{background:var(--surface-light);padding:10px;border-radius:8px;display:flex;flex-direction:column;gap:8px}
+        .upgrade-header{display:flex;justify-content:space-between;align-items:center}
+        .upgrade-cost{background:#ffc107;color:#000;padding:6px 8px;border-radius:999px;font-weight:700}
+        .quick-actions{position:fixed;left:0;right:0;bottom:0;background:var(--surface);display:flex;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));border-top:2px solid var(--surface-light)}
+        .quick-btn{flex:1;background:var(--surface-light);border:none;padding:10px;border-radius:10px;font-weight:700;cursor:pointer}
+        .notification{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:var(--surface);padding:12px 16px;border-radius:10px;border-left:4px solid var(--accent);box-shadow:0 8px 20px rgba(0,0,0,.4);opacity:0;transition:all .25s;pointer-events:none}
+        .notification.show{opacity:1;pointer-events:auto}
+        @media(min-width:768px){.game-container{max-width:520px}}
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="title">🏭 Индустриализация</h1>
+
+        <div class="stats-row">
+            <div class="stat-card" id="gold-card" title="Нажмите чтобы продать всё" onclick="sellAll('all')">
+                <div>💰</div>
+                <div style="font-weight:700;font-size:18px" id="gold">0</div>
+                <div style="font-size:11px;color:var(--text-secondary)">ЗОЛОТО</div>
+            </div>
+            <div class="stat-card" onclick="sellAll('harvest')">
+                <div>🌾</div>
+                <div style="font-weight:700;font-size:18px" id="harvest">0</div>
+                <div style="font-size:11px;color:var(--text-secondary)">УРОЖАЙ</div>
+            </div>
+            <div class="stat-card" onclick="sellAll('ore')">
+                <div>⛏️</div>
+                <div style="font-weight:700;font-size:18px" id="ore">0</div>
+                <div style="font-size:11px;color:var(--text-secondary)">РУДА</div>
+            </div>
+            <div class="stat-card" onclick="sellAll('tools')">
+                <div>🛠️</div>
+                <div style="font-weight:700;font-size:18px" id="tools">0</div>
+                <div style="font-size:11px;color:var(--text-secondary)">ИНСТРУМЕНТЫ</div>
+            </div>
+        </div>
+
+        <div class="nav-tabs" role="tablist" aria-label="Основные вкладки">
+            <button class="tab-btn active" data-tab="farm">🌾 Ферма</button>
+            <button class="tab-btn" data-tab="mine">⛏️ Шахта</button>
+            <button class="tab-btn" data-tab="craft">🛠️ Крафт</button>
+            <button class="tab-btn" data-tab="research">🔬 Исследования</button>
+            <button class="tab-btn" data-tab="upgrades">📈 Улучшения</button>
+        </div>
+
+        <main class="content-area">
+            <!-- FARM -->
+            <section class="tab-content active" id="farm-content">
+                <div class="production-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">🌾</div>
+                        <div>
+                            <div class="panel-title">Сельское хозяйство</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Урожай: <span id="farm-yield">1</span>/сек</div>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px">
+                            <span>Прогресс роста</span><span id="farm-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-fill" id="farm-progress" style="width:0%"></div></div>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-btn" id="plant-btn" onclick="plantCrops()">🌱 Посадить (50 золота)</button>
+                        <button class="action-btn" id="harvest-btn" onclick="harvestCrops()" disabled>✂️ Собрать урожай</button>
+                    </div>
+                </div>
+
+                <div class="upgrades-shop" style="margin-top:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <div style="font-weight:700">🏪 Улучшения фермы</div>
+                        <div style="font-size:13px;color:var(--text-secondary)">Ур. <span id="farm-level">1</span></div>
+                    </div>
+                    <div class="upgrades-list" id="farm-upgrades"></div>
+                </div>
+            </section>
+
+            <!-- MINE -->
+            <section class="tab-content" id="mine-content">
+                <div class="production-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">⛏️</div>
+                        <div>
+                            <div class="panel-title">Горное дело</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Добыча за клик: <span id="mine-per-click">1</span></div>
+                        </div>
+                    </div>
+                    <div style="margin-top:8px">
+                        <button class="action-btn" onclick="mineOre()">⛏️ Добыть</button>
+                    </div>
+                    <div class="progress-container" style="margin-top:12px">
+                        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px">
+                            <span>Прогресс кирки</span><span id="pickaxe-progress">0/100</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-fill" id="pickaxe-progress-bar" style="width:0%"></div></div>
+                    </div>
+                </div>
+
+                <div class="upgrades-shop" style="margin-top:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <div style="font-weight:700">🏪 Улучшения шахты</div>
+                        <div style="font-size:13px;color:var(--text-secondary)">Ур. <span id="mine-level">1</span></div>
+                    </div>
+                    <div class="upgrades-list" id="mine-upgrades"></div>
+                </div>
+            </section>
+
+            <!-- CRAFT -->
+            <section class="tab-content" id="craft-content">
+                <div class="production-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">🛠️</div>
+                        <div>
+                            <div class="panel-title">Производство</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Скорость: <span id="craft-speed">0.1</span>/сек</div>
+                        </div>
+                    </div>
+
+                    <div class="progress-container">
+                        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px">
+                            <span>Прогресс производства</span><span id="craft-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-fill" id="craft-progress" style="width:0%"></div></div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="action-btn" id="craft-btn" onclick="craftTool()">⚡ Создать инструмент (5 руды)</button>
+                    </div>
+                </div>
+
+                <div class="upgrades-shop" style="margin-top:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <div style="font-weight:700">🏪 Улучшения производства</div>
+                        <div style="font-size:13px;color:var(--text-secondary)">Ур. <span id="craft-level">1</span></div>
+                    </div>
+                    <div class="upgrades-list" id="craft-upgrades"></div>
+                </div>
+            </section>
+
+            <!-- RESEARCH -->
+            <section class="tab-content" id="research-content">
+                <div class="production-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">🔬</div>
+                        <div>
+                            <div class="panel-title">Научные исследования</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Открывайте технологии</div>
+                        </div>
+                    </div>
+                    <div class="upgrades-list" id="research-grid" style="max-height:400px"></div>
+                </div>
+            </section>
+
+            <!-- GLOBAL UPGRADES -->
+            <section class="tab-content" id="upgrades-content">
+                <div class="production-panel">
+                    <div class="panel-header">
+                        <div class="panel-icon">📈</div>
+                        <div>
+                            <div class="panel-title">Глобальные улучшения</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Усильте экономику</div>
+                        </div>
+                    </div>
+
+                    <div class="upgrades-list" id="global-upgrades"></div>
+                </div>
+            </section>
+        </main>
+
+        <div class="notification" id="notification" aria-live="polite"></div>
+    </div>
+
+    <div class="quick-actions">
+        <button class="quick-btn" onclick="quickAction('harvest')">🌾 Сбор</button>
+        <button class="quick-btn" onclick="quickAction('mine')">⛏️ Копать</button>
+        <button class="quick-btn" onclick="quickAction('sell')">💰 Продать</button>
+        <button class="quick-btn" onclick="saveGame()">💾 Сохранить</button>
+        <button class="quick-btn" onclick="loadGame()">🔄 Загрузить</button>
+    </div>
+
+<script>
+/* ======================
+   Конфигурация (не мутируем!
+   CONFIG — источник правды)
+   ====================== */
+const CONFIG = {
+    BASE_CRAFT_SPEED: 0.1, // инструменты/сек базово
+    GROWTH_TIME: 30,       // секунд до 100% роста без бонусов
+    UPGRADE_COSTS: {
+        farm: [100,250,500,1000,2000,4000,8000,15000,30000,50000],
+        mine: [150,350,750,1500,3000,6000,12000,24000,48000,80000],
+        craft: [200,500,1000,2000,4000,8000,16000,32000,64000,100000],
+        research: [1000,5000,20000,50000,150000],
+        global: [5000,15000,45000,135000,405000]
+    },
+    SELL_MULTIPLIERS: { harvest: 2, ore: 3, tools: 10 },
+    XP_REWARDS: { harvest: 1, mine: 0.5, craft: 2, sell: 0.1 }
+};
+
+/* ======================
+   Исходное состояние
+   (без функции/объектных ссылок)
+   ====================== */
+const defaultState = {
+    gold: 100,
+    harvest: 0,
+    ore: 0,
+    tools: 0,
+    science: 0,
+
+    level: 1,
+    xp: 0,
+    xpToNextLevel: 100,
+
+    farm: {
+        planted: false,
+        growth: 0,       // 0..100 %
+        yield: 1,        // базовый урожай за сбор
+        speedMultiplier: 1,
+        level: 1,
+        upgrades: { seeds: 0, irrigation: 0, tractor: 0, greenhouse: 0, fertilizer: 0, harvester: 0, genetics: 0 }
+    },
+
+    mine: {
+        perClick: 1,
+        level: 1,
+        pickaxeXP: 0,
+        pickaxeLevel: 1,
+        upgrades: { pickaxe: 0, drill: 0, depth: 0, explosives: 0, elevator: 0 }
+    },
+
+    craft: {
+        speed: CONFIG.BASE_CRAFT_SPEED,
+        progress: 0, // 0..100
+        level: 1,
+        upgrades: { tools: 0, factory: 0, automation: 0, quality: 0, assembly: 0, robotics: 0 }
+    },
+
+    research: {
+        unlocked: []
+    },
+
+    globalUpgrades: {
+        efficiency: 0,
+        productivity: 0,
+        innovation: 0,
+        monopoly: 0
+    },
+
+    // meta
+    lastTick: Date.now()
+};
+
+/* Клонирование для состояния игры */
+let gameState = JSON.parse(JSON.stringify(defaultState));
+
+/* ======================
+   Описания улучшений (как в исходнике),
+   эффекты применяются при покупке — но эффекты
+   теперь вычисляются при отрисовке UI, а также
+   при применении (чтобы не дублировать)
+   ====================== */
+const UPGRADES = {
+    farm: [
+        { id:'seeds', name:'Улучшенные семена', icon:'🌱', description:'+1 урожая за уровень', maxLevel:10, type:'yield' },
+        { id:'irrigation', name:'Система орошения', icon:'💧', description:'+20% скорости за уровень', maxLevel:10, type:'speed' },
+        { id:'tractor', name:'Трактор', icon:'🚜', description:'Автопосадка/сбор (включение)', maxLevel:1, type:'auto' },
+        { id:'greenhouse', name:'Теплица', icon:'🏭', description:'+50% к скорости', maxLevel:1, type:'speed_flat' },
+        { id:'fertilizer', name:'Удобрения', icon:'🧪', description:'+2 урожая за уровень', maxLevel:5, type:'yield_flat' },
+        { id:'harvester', name:'Комбайн', icon:'🌾', description:'Автосбор каждые 10 сек', maxLevel:1, type:'auto_harvest' },
+        { id:'genetics', name:'Генетика', icon:'🧬', description:'Растения растут в 2 раза быстрее', maxLevel:1, type:'speed_mul2' }
+    ],
+    mine: [
+        { id:'pickaxe', name:'Стальная кирка', icon:'⛏️', description:'+1 к добыче за уровень', maxLevel:20, type:'perClick' },
+        { id:'drill', name:'Буровая установка', icon:'🛢️', description:'Автодобыча 0.5 руды/сек за уровень', maxLevel:10, type:'drill' },
+        { id:'depth', name:'Глубокое бурение', icon:'⬇️', description:'Шанс редкой руды', maxLevel:5, type:'depth' },
+        { id:'explosives', name:'Взрывчатка', icon:'💥', description:'Удваивает добычу за клик (вкл.)', maxLevel:1, type:'multiplier' },
+        { id:'elevator', name:'Шахтный лифт', icon:'🛗', description:'+50% к добыче', maxLevel:1, type:'speed' }
+    ],
+    craft: [
+        { id:'tools', name:'Улучшенные станки', icon:'⚙️', description:'+0.05 к скорости за уровень', maxLevel:20, type:'speed' },
+        { id:'factory', name:'Автоматизация', icon:'🏭', description:'Автокрафт (вкл.)', maxLevel:1, type:'auto' },
+        { id:'quality', name:'Контроль качества', icon:'⭐', description:'+5% цене/уровень', maxLevel:10, type:'value' },
+        { id:'assembly', name:'Сборочная линия', icon:'📦', description:'Увеличивает скорость производства в 2 раза', maxLevel:1, type:'assembly' },
+        { id:'robotics', name:'Роботизация', icon:'🤖', description:'Производство не тратит руду', maxLevel:1, type:'robotics' }
+    ],
+    global: [
+        { id:'efficiency', name:'Эффективность', icon:'📊', description:'+10% к продаже/уровень', maxLevel:10, type:'sell' },
+        { id:'productivity', name:'Продуктивность', icon:'📈', description:'+5% к производству/уровень', maxLevel:10, type:'all' },
+        { id:'innovation', name:'Инновации', icon:'💡', description:'+20% к опыту/уровень', maxLevel:5, type:'research' },
+        { id:'monopoly', name:'Монополия', icon:'👑', description:'Удвойт цену продаж (вкл.)', maxLevel:1, type:'monopoly' }
+    ]
+};
+
+/* ======================
+   Вспомогательные функции
+   ====================== */
+function showNotification(msg, type='info') {
+    const n = document.getElementById('notification');
+    n.textContent = msg;
+    n.className = 'notification show';
+    if(type === 'success') n.style.borderLeftColor = 'var(--success)';
+    else if(type === 'error') n.style.borderLeftColor = 'var(--error)';
+    else n.style.borderLeftColor = 'var(--accent)';
+    clearTimeout(n._hide);
+    n._hide = setTimeout(()=> n.classList.remove('show'), 2500);
+}
+
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+/* ======================
+   Логика покупок и применения эффектов
+   ====================== */
+function buyUpgrade(category, upgradeId){
+    const upgrade = UPGRADES[category].find(u=>u.id===upgradeId);
+    if(!upgrade) return;
+    const currentLevel = gameState[category].upgrades[upgradeId] || 0;
+    if(currentLevel >= upgrade.maxLevel){ showNotification('Максимальный уровень!', 'info'); return; }
+    const costArr = CONFIG.UPGRADE_COSTS[category] || [];
+    const cost = costArr[currentLevel] || Math.floor((currentLevel+1)*1000);
+    if(gameState.gold < cost){ showNotification(`Нужно ${cost} золота!`, 'error'); return; }
+    gameState.gold -= cost;
+    gameState[category].upgrades[upgradeId] = currentLevel + 1;
+
+    // Применить эффекты, но так, чтобы состояние оставалось консистентным
+    applyUpgradeEffect(category, upgradeId, currentLevel+1);
+
+    // Пересчитать уровни (простая логика: уровень = 1 + сумма числовых апгрейдов)
+    recalcLevels();
+    renderAll();
+    showNotification(`${upgrade.name} улучшено до уровня ${currentLevel+1}`, 'success');
+}
+
+function applyUpgradeEffect(category, upgradeId, level){
+    // Повторное применение — аккуратно: эффекты здесь применяются как "одноразовый" отклик,
+    // но основная логика использует значения upgrades при вычислениях (чтобы избежать дублирования).
+    // Здесь делаем только те эффекты, которые логично установить моментально (например, robotics — ставим флаг).
+    if(category === 'craft' && upgradeId === 'robotics'){
+        gameState.craft.upgrades.robotics = level; // 0 или 1+
+    }
+    if(category === 'mine' && upgradeId === 'drill'){
+        gameState.mine.upgrades.drill = level;
+    }
+    if(category === 'farm' && (upgradeId === 'tractor' || upgradeId === 'harvester')){
+        gameState.farm.upgrades[upgradeId] = level;
+    }
+    if(category === 'global' && upgradeId === 'monopoly'){
+        gameState.globalUpgrades.monopoly = level;
+    }
+    // основные эффекты считаем динамически в вычислениях (например speed/yield)
+}
+
+/* ======================
+   Продажа ресурсов
+   ====================== */
+function sellAll(resourceType){
+    // поддержка 'all'
+    const sell = (type) => {
+        let amount = Math.floor(gameState[type]);
+        if(amount <= 0) return 0;
+        let multiplier = CONFIG.SELL_MULTIPLIERS[type] || 1;
+        if(gameState.globalUpgrades.efficiency) multiplier *= (1 + 0.1 * gameState.globalUpgrades.efficiency);
+        if(gameState.globalUpgrades.monopoly) multiplier *= 2;
+        const value = Math.floor(amount * multiplier);
+        gameState.gold += value;
+        gameState[type] = 0;
+        addXP(CONFIG.XP_REWARDS.sell * amount);
+        return value;
+    };
+
+    if(resourceType === 'all'){
+        let sold = 0;
+        sold += sell('harvest');
+        sold += sell('ore');
+        sold += sell('tools');
+        if(sold === 0) showNotification('Нечего продавать', 'info');
+        else showNotification(`Продано на ${sold} золота!`, 'success');
+        renderAll();
+        return;
+    } else {
+        const types = {harvest:'Урожай', ore:'Руда', tools:'Инструменты'};
+        const prev = (resourceType === 'tools') ? gameState.tools : Math.floor(gameState[resourceType]);
+        if(prev <= 0){ showNotification('Нечего продавать', 'info'); return; }
+        const value = sell(resourceType);
+        showNotification(`${types[resourceType]} проданы за ${value} золота`, 'success');
+        renderAll();
+    }
+}
+
+/* ======================
+   Добыча, сбор, крафт
+   ====================== */
+function plantCrops(){
+    const baseCost = 50;
+    const adjustedCost = Math.floor(baseCost * (1 + (gameState.farm.level-1)*0.05));
+    if(gameState.gold < adjustedCost){ showNotification(`Нужно ${adjustedCost} золота!`, 'error'); return; }
+    if(gameState.farm.planted){ showNotification('Уже посажено', 'info'); return; }
+    gameState.gold -= adjustedCost;
+    gameState.farm.planted = true;
+    gameState.farm.growth = 0;
+    renderAll();
+    showNotification(`Посажено (-${adjustedCost} золота)`, 'success');
+}
+
+function harvestCrops(){
+    if(!gameState.farm.planted || gameState.farm.growth < 100){ showNotification('Урожай ещё не созрел', 'error'); return; }
+    // вычисляем урожай на основе базового yield + апгрейдов
+    let y = gameState.farm.yield;
+    y += (gameState.farm.upgrades.seeds || 0); // seeds +1 за уровень
+    y += (gameState.farm.upgrades.fertilizer || 0) * 2; // fertilizer +2 за уровень
+    // уровень фермы даёт небольшой бонус
+    y *= (1 + (gameState.farm.level-1)*0.05);
+    y = Math.floor(y);
+    gameState.harvest += y;
+    gameState.farm.planted = false;
+    gameState.farm.growth = 0;
+    addXP(CONFIG.XP_REWARDS.harvest * y);
+    renderAll();
+    showNotification(`Собрано ${y} урожая!`, 'success');
+}
+
+function mineOre(){
+    let amount = gameState.mine.perClick;
+    amount += (gameState.mine.upgrades.pickaxe || 0);
+    if(gameState.mine.upgrades.explosives) amount *= 2;
+    if(gameState.mine.upgrades.elevator) amount *= 1.5;
+    amount *= (1 + (gameState.mine.level-1)*0.05);
+    amount = Math.floor(amount);
+
+    // шанс редкой руды от depth
+    if((gameState.mine.upgrades.depth || 0) > 0){
+        const chance = 0.05 * (gameState.mine.upgrades.depth || 0);
+        if(Math.random() < chance){
+            amount *= 2;
+            showNotification('Найдена редкая руда! x2', 'info');
+        }
+    }
+
+    gameState.ore += amount;
+    gameState.mine.pickaxeXP += amount;
+    addXP(CONFIG.XP_REWARDS.mine * amount);
+    renderAll();
+    showNotification(`Добыто ${amount} руды!`, 'success');
+}
+
+function craftTool(){
+    const oreCost = (gameState.craft.upgrades.robotics ? 0 : 5);
+    if(gameState.ore < oreCost){ showNotification(`Нужно ${oreCost} руды!`, 'error'); return; }
+
+    // стоимость списывается
+    gameState.ore -= oreCost;
+
+    // базовая ценность инструмента
+    let value = 1;
+    value *= (1 + (gameState.craft.upgrades.quality || 0) * 0.05); // quality +5% value
+    value *= (1 + (gameState.craft.level-1)*0.1);
+    // учтём глобальную продуктивность
+    value *= (1 + (gameState.globalUpgrades.productivity || 0) * 0.05);
+
+    // добавим как дробный инструмент
+    gameState.tools += value;
+    addXP(CONFIG.XP_REWARDS.craft * value);
+
+    // ускоряем прогресс отображаемо
+    gameState.craft.progress += 20;
+    renderAll();
+    showNotification(`Создан инструмент (${value.toFixed(1)})`, 'success');
+}
+
+/* ======================
+   Авто-процессы и апдейт прогресса (tick каждые 1 сек)
+   ====================== */
+function tick() {
+    const now = Date.now();
+    const deltaSec = Math.max(0, (now - (gameState.lastTick || now)) / 1000);
+    gameState.lastTick = now;
+
+    // 1) AUTO FARM: трактор / комбайн / автосбор
+    const farmSpeedBase = 100 / CONFIG.GROWTH_TIME; // % в секунду
+    let farmSpeed = farmSpeedBase * (gameState.farm.speedMultiplier || 1);
+
+    // эффекты от апгрейдов: irrigation +20% speed per level
+    if(gameState.farm.upgrades.irrigation) farmSpeed *= (1 + 0.2 * gameState.farm.upgrades.irrigation);
+    if(gameState.farm.upgrades.greenhouse) farmSpeed *= 1.5;
+    if(gameState.farm.upgrades.genetics) farmSpeed *= 2;
+    // уровень фермы небольшое ускорение
+    farmSpeed *= (1 + (gameState.farm.level - 1) * 0.05);
+    // глобальная продуктивность
+    farmSpeed *= (1 + (gameState.globalUpgrades.productivity || 0) * 0.05);
+
+    if(gameState.farm.planted){
+        gameState.farm.growth += farmSpeed * deltaSec;
+        if(gameState.farm.growth >= 100){
+            gameState.farm.growth = 100;
+            if(gameState.farm.upgrades.harvester){ // автосбор мгновенно
+                harvestCrops();
+            }
+        }
+    } else {
+        // автоматическая посадка
+        if(gameState.farm.upgrades.tractor && gameState.gold >= 50){
+            // садим без списания лишнего (одно действие в tick)
+            plantCrops();
+        }
+    }
+
+    // 2) AUTO MINE: drill gives ore per sec
+    if(gameState.mine.upgrades.drill){
+        const autoOrePerSec = (gameState.mine.upgrades.drill || 0) * 0.5;
+        gameState.ore += autoOrePerSec * deltaSec;
+        gameState.mine.pickaxeXP += autoOrePerSec * deltaSec;
+        addXP(CONFIG.XP_REWARDS.mine * autoOrePerSec * deltaSec);
+    }
+
+    // 3) CRAFT PROGRESS: автоматическое производство
+    // compute craft speed per sec
+    let craftSpeed = CONFIG.BASE_CRAFT_SPEED;
+    craftSpeed += (gameState.craft.upgrades.tools || 0) * 0.05;
+    if(gameState.craft.upgrades.assembly) craftSpeed *= 2;
+    craftSpeed *= (1 + (gameState.craft.level-1)*0.05);
+    craftSpeed *= (1 + (gameState.globalUpgrades.productivity || 0) * 0.05);
+    // auto factory gives small progress if factory present
+    if(gameState.craft.upgrades.factory) gameState.craft.progress += 0.1 * deltaSec;
+
+    // add craftSpeed to progress as % per second (scale to percent)
+    // We interpret craftSpeed as "tools per sec", but for progress we convert:
+    // 1 tool = 100% progress. So progress += craftSpeed * deltaSec * 100
+    gameState.craft.progress += craftSpeed * deltaSec * 100;
+
+    // generate tools when progress >=100
+    while(gameState.craft.progress >= 100){
+        gameState.craft.progress -= 100;
+        // create tool based on quality/level
+        let value = 1;
+        value *= (1 + (gameState.craft.upgrades.quality || 0) * 0.05);
+        value *= (1 + (gameState.craft.level-1) * 0.1);
+        value *= (1 + (gameState.globalUpgrades.productivity || 0) * 0.05);
+        gameState.tools += value;
+        addXP(CONFIG.XP_REWARDS.craft * value);
+    }
+
+    // 4) Pickaxe level progress
+    const xpNeeded = gameState.mine.pickaxeLevel * 100;
+    if(gameState.mine.pickaxeXP >= xpNeeded){
+        const times = Math.floor(gameState.mine.pickaxeXP / xpNeeded);
+        gameState.mine.pickaxeXP -= times * xpNeeded;
+        gameState.mine.pickaxeLevel += times;
+        gameState.mine.perClick += times; // +1 per level
+        showNotification(`Кирка улучшена до уровня ${gameState.mine.pickaxeLevel}`, 'success');
+    }
+
+    // keep numeric resources sane
+    gameState.ore = Math.max(0, gameState.ore);
+    gameState.harvest = Math.max(0, gameState.harvest);
+    gameState.tools = Math.max(0, gameState.tools);
+
+    renderAll();
+}
+
+/* ======================
+   Опыт и уровни
+   ====================== */
+function addXP(amount){
+    if(!amount) return;
+    // innovation gives XP bonus
+    if(gameState.globalUpgrades.innovation) amount *= (1 + 0.2 * gameState.globalUpgrades.innovation);
+    gameState.xp += amount;
+    while(gameState.xp >= gameState.xpToNextLevel){
+        gameState.xp -= gameState.xpToNextLevel;
+        gameState.level++;
+        gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.5);
+        const reward = gameState.level * 100;
+        gameState.gold += reward;
+        showNotification(`🎉 Уровень ${gameState.level}! +${reward} золота`, 'success');
+    }
+}
+
+/* ======================
+   Рендер / UI
+   ====================== */
+function renderAll(){
+    // ресурсы
+    document.getElementById('gold').textContent = Math.floor(gameState.gold);
+    document.getElementById('harvest').textContent = Math.floor(gameState.harvest);
+    document.getElementById('ore').textContent = Math.floor(gameState.ore);
+    document.getElementById('tools').textContent = (Math.round(gameState.tools*10)/10).toFixed(1);
+
+    // farm UI
+    document.getElementById('farm-yield').textContent = computeFarmYield().toFixed(1);
+    document.getElementById('farm-progress').style.width = `${clamp(gameState.farm.growth,0,100)}%`;
+    document.getElementById('farm-progress-text').textContent = `${Math.floor(gameState.farm.growth)}%`;
+    document.getElementById('farm-level').textContent = gameState.farm.level;
+
+    // mine UI
+    document.getElementById('mine-per-click').textContent = gameState.mine.perClick;
+    document.getElementById('pickaxe-progress-bar').style.width = `${Math.min(gameState.mine.pickaxeXP / (gameState.mine.pickaxeLevel*100) * 100, 100)}%`;
+    document.getElementById('pickaxe-progress').textContent = `${Math.floor(gameState.mine.pickaxeXP)}/${gameState.mine.pickaxeLevel*100}`;
+    document.getElementById('mine-level').textContent = gameState.mine.level;
+
+    // craft UI
+    document.getElementById('craft-progress').style.width = `${clamp(gameState.craft.progress,0,100)}%`;
+    document.getElementById('craft-progress-text').textContent = `${Math.floor(gameState.craft.progress)}%`;
+    document.getElementById('craft-speed').textContent = computeCraftSpeed().toFixed(2);
+    document.getElementById('craft-level').textContent = gameState.craft.level;
+
+    // buttons enable/disable
+    document.getElementById('harvest-btn').disabled = !(gameState.farm.planted && gameState.farm.growth >= 100);
+    document.getElementById('plant-btn').disabled = gameState.farm.planted;
+    document.getElementById('craft-btn').disabled = !(gameState.ore >= (gameState.craft.upgrades.robotics ? 0 : 5));
+
+    // render upgrades lists
+    renderUpgrades();
+    renderResearch();
+    renderGlobalUpgrades();
+}
+
+/* вычисляем урожай динамически */
+function computeFarmYield(){
+    let y = gameState.farm.yield;
+    y += (gameState.farm.upgrades.seeds || 0);
+    y += (gameState.farm.upgrades.fertilizer || 0) * 2;
+    y *= (1 + (gameState.farm.level-1)*0.05);
+    return y;
+}
+
+/* вычисляем craft speed для отображения */
+function computeCraftSpeed(){
+    let craftSpeed = CONFIG.BASE_CRAFT_SPEED;
+    craftSpeed += (gameState.craft.upgrades.tools || 0) * 0.05;
+    if(gameState.craft.upgrades.assembly) craftSpeed *= 2;
+    craftSpeed *= (1 + (gameState.craft.level-1)*0.05);
+    craftSpeed *= (1 + (gameState.globalUpgrades.productivity || 0) * 0.05);
+    return craftSpeed;
+}
+
+/* ======================
+   Рендер улучшений
+   ====================== */
+function renderUpgrades(){
+    ['farm','mine','craft'].forEach(category=>{
+        const container = document.getElementById(`${category}-upgrades`);
+        if(!container) return;
+        container.innerHTML = '';
+        UPGRADES[category].forEach(u=>{
+            const cur = gameState[category].upgrades[u.id] || 0;
+            const max = u.maxLevel || 1;
+            const cost = (CONFIG.UPGRADE_COSTS[category] && CONFIG.UPGRADE_COSTS[category][cur]) ? CONFIG.UPGRADE_COSTS[category][cur] : Math.floor((cur+1)*1000);
+            const canAfford = gameState.gold >= cost;
+            const isMax = cur >= max;
+            const item = document.createElement('div');
+            item.className = 'upgrade-item';
+            item.innerHTML = `
+                <div class="upgrade-header">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <div>${u.icon}</div>
+                        <div style="font-weight:700">${u.name}<div style="font-size:12px;color:var(--text-secondary)">Ур. ${cur}/${max}</div></div>
+                    </div>
+                    <div class="upgrade-cost">${isMax ? 'MAX' : cost}</div>
+                </div>
+                <div style="color:var(--text-secondary);font-size:13px">${u.description}</div>
+                <div style="display:flex;gap:8px">
+                    <button ${isMax||!canAfford ? 'disabled' : ''} style="flex:1;padding:8px;border-radius:8px;border:none;background:${isMax? 'var(--success)': canAfford ? 'var(--primary)' : '#666'};color:#fff;cursor:pointer" onclick="buyUpgrade('${category}','${u.id}')">
+                        ${isMax ? '✅ Макс. уровень' : canAfford ? 'Купить' : 'Недостаточно золота'}
+                    </button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    });
+}
+
+function renderResearch(){
+    const container = document.getElementById('research-grid');
+    if(!container) return;
+    container.innerHTML = '';
+    const list = [
+        { id:'mechanization', name:'Механизация', icon:'⚙️', cost:1000 },
+        { id:'chemistry', name:'Химия', icon:'🧪', cost:5000 },
+        { id:'electricity', name:'Электричество', icon:'⚡', cost:20000 },
+        { id:'automation', name:'Автоматизация', icon:'🤖', cost:50000 },
+        { id:'nanotechnology', name:'Нанотехнологии', icon:'🔬', cost:150000 }
+    ];
+    list.forEach(r=>{
+        const unlocked = gameState.research.unlocked.includes(r.id);
+        const can = gameState.gold >= r.cost && !unlocked;
+        const card = document.createElement('div');
+        card.className = 'upgrade-item';
+        card.style.cursor = can ? 'pointer' : 'default';
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="display:flex;gap:8px;align-items:center"><div style="font-size:22px">${r.icon}</div><div style="font-weight:700">${r.name}</div></div>
+                <div style="font-size:13px;color:var(--text-secondary)">${unlocked ? '✅ Исследовано' : '💰 ' + r.cost}</div>
+            </div>
+            <div style="color:var(--text-secondary);font-size:13px;margin-top:8px">${unlocked ? 'Эффект уже применён' : ''}</div>
+        `;
+        if(can) card.onclick = ()=>researchTech(r.id, r.cost);
+        container.appendChild(card);
+    });
+}
+
+function renderGlobalUpgrades(){
+    const container = document.getElementById('global-upgrades');
+    if(!container) return;
+    container.innerHTML = '';
+    UPGRADES.global.forEach(u=>{
+        const cur = gameState.globalUpgrades[u.id] || 0;
+        const max = u.maxLevel || 1;
+        const cost = (CONFIG.UPGRADE_COSTS.global && CONFIG.UPGRADE_COSTS.global[cur]) ? CONFIG.UPGRADE_COSTS.global[cur] : Math.floor((cur+1)*5000);
+        const can = gameState.gold >= cost;
+        const isMax = cur >= max;
+        const item = document.createElement('div');
+        item.className = 'upgrade-item';
+        item.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="display:flex;gap:8px;align-items:center"><div>${u.icon}</div><div style="font-weight:700">${u.name}<div style="font-size:12px;color:var(--text-secondary)">Ур. ${cur}/${max}</div></div></div>
+                <div class="upgrade-cost">${isMax ? 'MAX' : cost}</div>
+            </div>
+            <div style="color:var(--text-secondary);font-size:13px;margin-top:8px">${u.description}</div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button ${isMax||!can ? 'disabled' : ''} style="flex:1;padding:8px;border-radius:8px;border:none;background:${isMax? 'var(--success)': can ? 'var(--primary)' : '#666'};color:#fff" onclick="buyGlobal('${u.id}')">
+                    ${isMax ? '✅ Макс. уровень' : can ? 'Купить' : 'Недостаточно золота'}
+                </button>
+            </div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+function buyGlobal(id){
+    const u = UPGRADES.global.find(x=>x.id===id);
+    if(!u) return;
+    const cur = gameState.globalUpgrades[id] || 0;
+    if(cur >= u.maxLevel){ showNotification('Максимальный уровень!', 'info'); return; }
+    const cost = (CONFIG.UPGRADE_COSTS.global && CONFIG.UPGRADE_COSTS.global[cur]) ? CONFIG.UPGRADE_COSTS.global[cur] : Math.floor((cur+1)*5000);
+    if(gameState.gold < cost){ showNotification(`Нужно ${cost} золота!`, 'error'); return; }
+    gameState.gold -= cost;
+    gameState.globalUpgrades[id] = cur + 1;
+    // некоторые глобальные эффекты могут быть применены немедленно (monopoly handled)
+    if(id === 'monopoly') gameState.globalUpgrades.monopoly = cur+1;
+    renderAll();
+    showNotification(`${u.name} улучшено до ${cur+1}`, 'success');
+}
+
+/* ======================
+   Исследования
+   ====================== */
+function researchTech(id, cost){
+    if(gameState.research.unlocked.includes(id)){ showNotification('Уже исследовано', 'info'); return; }
+    if(gameState.gold < cost){ showNotification(`Нужно ${cost} золота!`, 'error'); return; }
+    gameState.gold -= cost;
+    gameState.research.unlocked.push(id);
+    gameState.science++;
+    // применяем эффекты (без мутирования CONFIG)
+    switch(id){
+        case 'mechanization':
+            gameState.farm.speedMultiplier *= 1.5;
+            showNotification('Механизация: +50% к скорости фермы', 'success');
+            break;
+        case 'chemistry':
+            gameState.farm.yield *= 2;
+            showNotification('Химия: x2 к урожайности', 'success');
+            break;
+        case 'electricity':
+            gameState.mine.perClick *= 2;
+            showNotification('Электричество: x2 к добыче за клик', 'success');
+            break;
+        case 'automation':
+            gameState.craft.speed *= 3;
+            showNotification('Автоматизация: x3 к скорости производства', 'success');
+            break;
+        case 'nanotechnology':
+            // безопасно изменяем только state (не CONFIG)
+            gameState.specialNanotech = (gameState.specialNanotech || 0) + 1;
+            // увеличим цену инструментов при продаже — handled in sellAll via specialNanotech
+            showNotification('Нанотехнологии: улучшение эффективности инструментов', 'success');
+            break;
+    }
+    renderAll();
+}
+
+/* ======================
+   Сохранение / Загрузка
+   ====================== */
+const SAVE_KEY = 'industrializationSave_v2';
+
+function saveGame(){
+    try{
+        const toSave = JSON.parse(JSON.stringify(gameState));
+        // не сохраняем временные поля если нужно
+        localStorage.setItem(SAVE_KEY, JSON.stringify(toSave));
+        showNotification('Игра сохранена!', 'success');
+    }catch(e){
+        console.error(e);
+        showNotification('Ошибка при сохранении', 'error');
+    }
+}
+
+function loadGame(){
+    try{
+        const s = localStorage.getItem(SAVE_KEY);
+        if(!s){ renderAll(); showNotification('Нет сохранений — загружено состояние по умолчанию', 'info'); return; }
+        const parsed = JSON.parse(s);
+        // валидация/merge: копируем только известные поля
+        gameState = Object.assign(JSON.parse(JSON.stringify(defaultState)), parsed);
+        // безопасные восстановительные шаги
+        gameState.lastTick = Date.now();
+        // пересчёт уровней корректный
+        recalcLevels();
+        renderAll();
+        showNotification('Игра загружена!', 'success');
+    }catch(e){
+        console.error(e);
+        showNotification('Ошибка при загрузке', 'error');
+    }
+}
+
+function resetGame(){
+    if(confirm('Сбросить весь прогресс?')) {
+        localStorage.removeItem(SAVE_KEY);
+        gameState = JSON.parse(JSON.stringify(defaultState));
+        renderAll();
+        showNotification('Прогресс сброшен', 'success');
+    }
+}
+
+/* ======================
+   Утилиты UI
+   ====================== */
+function recalcLevels(){
+    // простая политика: уровень = 1 + сумма числовых апгрейдов (можно заменить на любую другую)
+    gameState.farm.level = 1 + sumNumericValues(gameState.farm.upgrades);
+    gameState.mine.level = 1 + sumNumericValues(gameState.mine.upgrades);
+    gameState.craft.level = 1 + sumNumericValues(gameState.craft.upgrades);
+}
+
+function sumNumericValues(obj){
+    return Object.values(obj || {}).reduce((acc,v)=> acc + (typeof v === 'number' ? v : 0), 0);
+}
+
+/* ======================
+   Быстрые действия
+   ====================== */
+function quickAction(action){
+    if(action === 'harvest'){
+        if(gameState.farm.planted && gameState.farm.growth >= 100) harvestCrops();
+        else showNotification('Урожай не готов', 'info');
+    } else if(action === 'mine'){
+        mineOre();
+    } else if(action === 'sell'){
+        sellAll('all');
+    }
+}
+
+/* ======================
+   Управление вкладками
+   ====================== */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+        btn.classList.add('active');
+        const id = btn.getAttribute('data-tab');
+        const el = document.getElementById(`${id}-content`);
+        if(el) el.classList.add('active');
+    });
+});
+
+/* ======================
+   Инициализация
+   ====================== */
+function init(){
+    // начальная инициализация
+    recalcLevels();
+    renderAll();
+    // tick каждую секунду
+    gameState.lastTick = Date.now();
+    setInterval(tick, 1000);
+    showNotification('Добро пожаловать в Индустриализацию v2.0!', 'info');
+    // expose for debugging
+    window.gameState = gameState;
+    window.resetGame = resetGame;
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
